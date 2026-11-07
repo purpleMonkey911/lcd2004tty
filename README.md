@@ -5,6 +5,8 @@ lcd2004tty is a TTY emulator application.  Data is sent from a host and is displ
 
 ![lcd2004tty hardware](./doc/lcd2004tty.jpg)
 
+<video src="./doc/lcd2004tty.mp4" width="100%" controls></video>
+
 ## Hardware pinout
 This project utilizes the following:
 - STM32G474RE Nucleo board
@@ -22,7 +24,13 @@ This project utilizes the following:
 | LCD2004 SDA              |  PB9           | CN10 pin 5 | I2C1 on STM32G4
 
 ## LCD2004 LCD Screen
-The LCD2004 LCD screen is a LCD screen driven by a Hitachi HD44780 Controller. It contains a TI PCF8574T 8-bit expander for I2C communiation and control.  Despite this LCD being produced by numerous manufacturers, I haven't found good documentation for the I2C protocol.  The device driver used in this application was reversed engineered from various datasheets on the previously mentioned components and python and Arduino code written for this LCD.
+The LCD2004 LCD screen is a LCD screen driven by a Hitachi HD44780 Controller. It contains a TI PCF8574T 8-bit I/O expander for I2C communiation and control.  Despite this LCD being produced by numerous manufacturers, I haven't found good documentation for the I2C protocol.  The device driver used in this application was reversed engineered from various datasheets on the previously mentioned components and python and Arduino code written for this LCD.
+
+### I2C I/O
+Based on all the documentation, I2C communication is as follows:
+- slave address is 0x27 (this may vary based on the actual I/O expander)
+- 7-bit addressing
+- 100 KHz clock speed
 
 ## References
 - STM32G4 Nucleo 64 ([User Manual](https://www.st.com/resource/en/user_manual/um2505-stm32g4-nucleo64-boards-mb1367-stmicroelectronics.pdf)) ([schematic](https://www.st.com/resource/en/schematic_pack/mb1367-g474re-d01-schematic.pdf))
