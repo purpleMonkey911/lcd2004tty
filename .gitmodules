@@ -1,0 +1,6 @@
+[submodule "STM32CubeG4"]
+	path = STM32CubeG4
+	url = git@github.com:STMicroelectronics/STM32CubeG4.git
+[submodule "monkeyHAL"]
+	path = monkeyHAL
+	url = git@github.com:purpleMonkey911/monkeyHAL.git
