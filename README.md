@@ -3,9 +3,9 @@
 ## Overview
 lcd2004tty is a TTY emulator application.  Data is sent from a host and is displayed on the LCD2004 LCD screen in real-time.  The LCD screen will wrap both horzontally and scroll vertically, as needed.
 
-![lcd2004tty hardware](./doc/lcd2004tty.jpg)
+[![lcd2004tty hardware](./doc/lcd2004tty.jpg)](./doc/lcd2004tty.mp4)
 
-<video src="./doc/lcd2004tty.mp4" width="100%" controls></video>
+*Click the image to watch the demo video.*
 
 ## Hardware pinout
 This project utilizes the following:
