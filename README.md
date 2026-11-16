@@ -1,7 +1,7 @@
 # lcd2004tty
 
 ## Overview
-lcd2004tty is a TTY emulator application.  Data is sent from a host and is displayed on the LCD2004 LCD screen in real-time.  The LCD screen will wrap both horzontally and scroll vertically, as needed.
+lcd2004tty is a TTY emulator application.  Data is sent from a host and is displayed on the LCD2004 LCD screen in real-time.  The LCD screen will wrap both horzontally and scroll vertically, as needed.  The base platform for this application is an STM32G474RE Nucleo board.
 
 ![lcd2004tty hardware](./doc/lcd2004tty.jpg)
 
