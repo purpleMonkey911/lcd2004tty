@@ -67,15 +67,6 @@ RM := rm -rf
 # build directory directory structure
 ###############################################################################
 BUILD_DIR   = ./build
-BUILD_DIRS  = $(BUILD_DIR)
-BUILD_DIRS += $(BUILD_DIR)/src
-BUILD_DIRS += $(BUILD_DIR)/dev
-BUILD_DIRS += $(BUILD_DIR)/$(STM32_HAL_DIR)/Drivers
-BUILD_DIRS += $(BUILD_DIR)/$(STM32_HAL_DIR)/Drivers/STM32$(STM32_FAMILY)xx_HAL_Driver
-BUILD_DIRS += $(BUILD_DIR)/$(STM32_HAL_DIR)/Drivers/STM32$(STM32_FAMILY)xx_HAL_Driver/Src
-BUILD_DIRS += $(BUILD_DIR)/monkeyHAL
-BUILD_DIRS += $(BUILD_DIR)/monkeyHAL/stm32
-BUILD_DIRS += $(BUILD_DIR)/system
 
 ###############################################################################
 # STM32 compilation variables
@@ -140,7 +131,6 @@ else
 $(error Unsupported STM32_FAMILY: $(STM32_FAMILY))
 endif
 
-STM32_HAL_OBJS    = $(STM32_HAL_SRCS:.c=.o)
 STM32_HAL_OBJLIST = $(addprefix $(BUILD_DIR)/, $(STM32_HAL_SRCS:.c=.o))
 # STM32 HAL compiler flags
 STM32_HAL_FLAGS  = -mcpu=cortex-m4 -std=gnu11 -g3 -DUSE_HAL_DRIVER -D$(STM32_MCU)
@@ -156,7 +146,8 @@ SYS_INCLUDES  = -I./system
 ###############################################################################
 # monkeyHAL variables
 ###############################################################################
-MHAL_INCLUDES = -I./monkeyHAL/stm32
+MHAL_INCLUDES  = -I./monkeyHAL/common
+MHAL_INCLUDES += -I./monkeyHAL/stm32
 
 ###############################################################################
 # project compilation variables
@@ -167,9 +158,9 @@ PROJECT_INCLUDES += -I./dev
 # C source files
 C_SRCS    = $(shell find src -name "*.c")
 C_SRCS   += $(shell find dev -name "*.c")
+C_SRCS   += $(shell find monkeyHAL/common -maxdepth 1 -name "*.c")
 C_SRCS   += $(shell find monkeyHAL/stm32 -maxdepth 1 -name "*.c")
 C_SRCS   += $(shell find system -name "*.c")
-C_OBJS    = $(C_SRCS:.c=.o)
 C_OBJLIST = $(addprefix $(BUILD_DIR)/, $(C_SRCS:.c=.o))
 
 # C compiler flags
@@ -202,7 +193,6 @@ $(error Unsupported STM32_CHIP: $(STM32_CHIP))
 endif
 ASM_FLAGS    = -mcpu=cortex-m4 -g3 -D$(STM32_MCU) -c -MMD -MP
 ASM_FLAGS   += --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb
-ASM_OBJS    += $(ASM_SRCS:.s=.o)
 ASM_OBJLIST += $(addprefix $(BUILD_DIR)/, $(ASM_SRCS:.s=.o))
 
 ###############################################################################
@@ -230,14 +220,14 @@ LD_FLAGS += -Wl,--no-warn-rwx-segments
 ###############################################################################
 # output file(s) variables
 ###############################################################################
-OUTPUT_ELF  := $(PROJECT).elf
-OUTPUT_BIN  := $(PROJECT).bin
-OUTPUT_LIST := $(PROJECT).list
+OUTPUT_ELF  := $(BUILD_DIR)/$(PROJECT).elf
+OUTPUT_BIN  := $(BUILD_DIR)/$(PROJECT).bin
+OUTPUT_LIST := $(BUILD_DIR)/$(PROJECT).list
 
 ###############################################################################
 # Targets
 ###############################################################################
-all: print-compiler-version make-build-dir $(STM32_HAL_OBJS) $(C_OBJS) $(ASM_OBJS) $(OUTPUT_ELF) size-output $(OUTPUT_LIST) $(OUTPUT_BIN)
+all: print-compiler-version $(OUTPUT_ELF) size-output $(OUTPUT_LIST) $(OUTPUT_BIN)
 
 print-compiler-version:
 	@echo "Building $(PROJECT) with compiler:"
@@ -245,49 +235,57 @@ print-compiler-version:
 	@$(CC) --version
 	@echo ""
 
-# make build directory structure
-make-build-dir:
-	@echo "Make build directory structure"
-	@mkdir -p $(BUILD_DIRS)
+# Object files are written under $(BUILD_DIR), mirroring the source tree.
+# Each rule creates its own output directory, so no separate build-dir step
+# is needed (and parallel builds with -j are safe).  Static pattern rules are
+# used because the STM32 HAL and project sources need different flags.
 
 # compile STM32 HAL
-$(STM32_HAL_OBJS): %.o : %.c
-	@echo compiling $(addsuffix .c,$(basename $(notdir $@)))
-	@$(CC) $< $(STM32_HAL_FLAGS) -o $(BUILD_DIR)/$@
+$(STM32_HAL_OBJLIST): $(BUILD_DIR)/%.o : %.c
+	@echo compiling $<
+	@mkdir -p $(dir $@)
+	@$(CC) $< $(STM32_HAL_FLAGS) -o $@
 
 # compile project source code
-$(C_OBJS): %.o : %.c
-	@echo compiling $(addsuffix .c,$(basename $(notdir $@)))
-	@$(CC) $< $(C_FLAGS) -o $(BUILD_DIR)/$@
+$(C_OBJLIST): $(BUILD_DIR)/%.o : %.c
+	@echo compiling $<
+	@mkdir -p $(dir $@)
+	@$(CC) $< $(C_FLAGS) -o $@
 
 # compile project assembly code
-$(ASM_OBJS): %.o : %.s 
-	@echo compiling $(addsuffix .s,$(basename $(notdir $@)))
-	@$(CC) $< $(ASM_FLAGS) -o $(BUILD_DIR)/$@
+$(ASM_OBJLIST): $(BUILD_DIR)/%.o : %.s
+	@echo compiling $<
+	@mkdir -p $(dir $@)
+	@$(CC) $< $(ASM_FLAGS) -o $@
+
+# pull in auto-generated header dependencies from -MMD -MP
+# (missing on first build is OK)
+-include $(STM32_HAL_OBJLIST:.o=.d) $(C_OBJLIST:.o=.d) $(ASM_OBJLIST:.o=.d)
 
 # link all object code to create elf file and map file
-$(OUTPUT_ELF): $(STM32_HAL_OBJS) $(C_OBJS) $(ASM_OBJS)  $(LD)
+# (only relinks when an object file or the linker script changes)
+$(OUTPUT_ELF): $(STM32_HAL_OBJLIST) $(C_OBJLIST) $(ASM_OBJLIST) $(LD)
 	@echo ' '
 	@echo "Linking ($(LD))..."
 	@echo ' '
-	@$(CC) $(STM32_HAL_OBJLIST) $(C_OBJLIST) $(ASM_OBJLIST) $(LIBS) $(LD_FLAGS) -o $(BUILD_DIR)/$@
+	@$(CC) $(STM32_HAL_OBJLIST) $(C_OBJLIST) $(ASM_OBJLIST) $(LIBS) $(LD_FLAGS) -o $@
 	@echo 'Finished building target: $@'
 	@echo ' '
 
 # display elf file stats
 size-output: $(OUTPUT_ELF)
-	@$(SIZE)  $(BUILD_DIR)/$(OUTPUT_ELF)
+	@$(SIZE)  $(OUTPUT_ELF)
 	@echo ' '
 
 # create list file from elf file
 $(OUTPUT_LIST): $(OUTPUT_ELF)
-	@$(OBJDUMP) -h -S $(BUILD_DIR)/$(OUTPUT_ELF) > $(BUILD_DIR)/$(OUTPUT_LIST)
+	@$(OBJDUMP) -h -S $< > $@
 	@echo 'Finished building: $@'
 	@echo ' '
 
 # create bin file from elf file
 $(OUTPUT_BIN): $(OUTPUT_ELF)
-	@$(OBJCOPY) -O binary $(BUILD_DIR)/$(OUTPUT_ELF) $(BUILD_DIR)/$(OUTPUT_BIN)
+	@$(OBJCOPY) -O binary $< $@
 	@echo 'Finished building: $@'
 	@echo ' '
 
@@ -295,6 +293,6 @@ clean:
 	-$(RM) $(BUILD_DIR)
 	-@echo ' '
 
-.PHONY: all print-compiler-version make-build-dir size-output clean
+.PHONY: all print-compiler-version size-output clean
 
 

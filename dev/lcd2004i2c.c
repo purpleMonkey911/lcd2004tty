@@ -292,7 +292,7 @@ Lcd2004Status Lcd2004_Write(Lcd2004 lcd, uint8_t* data, size_t data_len) {
     }
     Lcd2004Hd44780Byte buffer[LCD2004_I2C_TRANSACTION_SZ_BYTES*data_len];
     memset(buffer, 0, sizeof(buffer));
-    for (int i = 0; i < data_len; i++) {
+    for (size_t i = 0; i < data_len; i++) {
         // high nibble 1st part
         buffer[4*i].value = data[i] & 0xF0;
         buffer[4*i].bits.backlight_en = 1;
