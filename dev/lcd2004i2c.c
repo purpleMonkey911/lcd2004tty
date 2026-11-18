@@ -185,6 +185,22 @@ Lcd2004Status Lcd2004_Init(Lcd2004* pLcd, Lcd2004Config* config) {
     return LCD2004_STATUS_OK;
 }
 
+Lcd2004Status Lcd2004_Deinit(Lcd2004* pLcd) {
+    if (!pLcd || !*pLcd) {
+        return LCD2004_STATUS_ERROR;
+    }
+    Lcd2004 lcd = *pLcd;
+
+    // don't leave the shared transfer descriptor pointing at freed memory
+    lcd2004i2c_xfer.done_cb_ctx  = NULL;
+    lcd2004i2c_xfer.error_cb_ctx = NULL;
+
+    RingBuffer_Destroy(&lcd->data_buffer);
+    free(lcd);
+    *pLcd = NULL;
+    return LCD2004_STATUS_OK;
+}
+
 Lcd2004Status Lcd2004_ClearScreen(Lcd2004 lcd) {
     if (!lcd) {
         return LCD2004_STATUS_ERROR;
@@ -197,6 +213,16 @@ Lcd2004Status Lcd2004_ClearScreen(Lcd2004 lcd) {
     return LCD2004_STATUS_OK;
 }
 
+/**
+ * @brief Build the 4-byte PCF8574 sequence for the HD44780 "clear display"
+ *        command in lcd->i2c_buffer, ready for the I2C transfer started by
+ *        the LCD2004_STATE_CLEAR state.
+ *
+ * @param lcd   Lcd2004 instance
+ *
+ * @return LCD2004_STATUS_OK if the buffer was built, LCD2004_STATUS_ERROR if
+ *         lcd is NULL
+ */
 static Lcd2004Status Lcd2004_ClearScreenSetup(Lcd2004 lcd) {
     if (!lcd) {
         return LCD2004_STATUS_ERROR;
@@ -444,4 +470,51 @@ Lcd2004Status Lcd2004_StateMachine(Lcd2004 lcd) {
     }
 
     return retval;
+}
+
+/**
+ * @brief Get the time left on the state machine timer.
+ *
+ * @param lcd   Lcd2004 instance
+ * @param usec  timer duration (us), measured from when the timer was started
+ *
+ * @return microseconds remaining, or 0 if the timer has already expired
+ */
+static int32_t Lcd2004_TimerRemainingUs(Lcd2004 lcd, uint32_t usec) {
+    uint32_t elapsed = mHalTimer_GetSystemTimerTimestamp() - lcd->state_machine.timer.start_time;
+    return (elapsed >= usec) ? 0 : (int32_t)(usec - elapsed);
+}
+
+int32_t Lcd2004_GetWaitTimeUs(Lcd2004 lcd) {
+    if (!lcd) {
+        return -1;
+    }
+
+    switch (lcd->state_machine.state) {
+        case LCD2004_STATE_IDLE:
+            // IDLE moves to CLEAR or SEND on the next call if work is queued
+            if (lcd->clear_screen_requested || !RingBuffer_IsEmpty(lcd->data_buffer)) {
+                return 0;
+            }
+            return -1;
+        case LCD2004_STATE_POWER_UP:
+            return Lcd2004_TimerRemainingUs(lcd, LCD2004_TIMER_POWER_UP_USEC);
+        case LCD2004_STATE_BUSY_WAIT:
+            return Lcd2004_TimerRemainingUs(lcd, lcd->state_machine.wait_time_us);
+        case LCD2004_STATE_BUSY:
+            // waiting on the I2C transfer to complete (an external event)
+            return -1;
+        default:
+            // INIT1-3, CLEAR, SEND, DONE, INIT_DONE, ERROR all advance on the
+            // next call
+            return 0;
+    }
+}
+
+bool Lcd2004_IsIdle(Lcd2004 lcd) {
+    return lcd &&
+           lcd->isInitialized &&
+           (lcd->state_machine.state == LCD2004_STATE_IDLE) &&
+           !lcd->clear_screen_requested &&
+           RingBuffer_IsEmpty(lcd->data_buffer);
 }

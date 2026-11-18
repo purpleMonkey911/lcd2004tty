@@ -47,6 +47,18 @@ typedef struct {
 extern Lcd2004Status Lcd2004_Init(Lcd2004* pLcd, Lcd2004Config* config);
 
 /**
+ * @brief Deinitialize Lcd2004 instance and free its resources
+ *
+ * @param pLcd   pointer to Lcd2004 instance (set to NULL on return)
+ *
+ * @note this does not deinitialize the I2C bus; the owner of the bus must do
+ *       that after the Lcd2004 instance is deinitialized
+ *
+ * @return LCD2004_STATUS_OK if instance successfully deinitialized
+ */
+extern Lcd2004Status Lcd2004_Deinit(Lcd2004* pLcd);
+
+/**
  * @brief Send command to clear LCD screen
  * 
  * @param lcd   Lcd2004 instance
@@ -83,5 +95,29 @@ extern Lcd2004Status Lcd2004_Write(Lcd2004 lcd, uint8_t* data, size_t data_len);
  * @return Lcd2004Status of state machine execution
  */ 
 extern Lcd2004Status Lcd2004_StateMachine(Lcd2004 lcd);
+
+/**
+ * @brief How long the caller can sleep before Lcd2004_StateMachine() has more
+ *        work to do.  Call after Lcd2004_StateMachine().
+ *
+ * @param lcd   Lcd2004 instance
+ *
+ * @return  0 : work pending, call Lcd2004_StateMachine() again right away
+ *         >0 : microseconds until an LCD timing delay expires
+ *         -1 : nothing to do until an external event (new data from
+ *              Lcd2004_Write()/SetCursor()/ClearScreen(), or an I2C transfer
+ *              completing)
+ */
+extern int32_t Lcd2004_GetWaitTimeUs(Lcd2004 lcd);
+
+/**
+ * @brief Check whether the LCD is initialized and has finished all queued
+ *        work (nothing in flight, nothing queued).
+ *
+ * @param lcd   Lcd2004 instance
+ *
+ * @return true if idle and ready for more data
+ */
+extern bool Lcd2004_IsIdle(Lcd2004 lcd);
 
 #endif // __LCD2004_H__
